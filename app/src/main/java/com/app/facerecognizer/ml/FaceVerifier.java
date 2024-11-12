@@ -18,8 +18,8 @@ public class FaceVerifier {
         this.embeddingCache = embeddingCache;
     }
 
-    public Pair<String, Float> verifyFace(Bitmap compareBitmap, List<FaceImageInfo> faceImageList) {
-        if (compareBitmap == null) return new Pair<>("", 0f);
+    public SimilarInfoBean verifyFace(Bitmap compareBitmap, List<FaceImageInfo> faceImageList) {
+        if (compareBitmap == null) return new SimilarInfoBean(0, "", "", 0f);
 
         // 获取图像的特征值
         String imagePath = compareBitmap.toString();
@@ -35,19 +35,22 @@ public class FaceVerifier {
         return findMostSimilarFace(currentEmbedding, faceImageList);
     }
 
-    private Pair<String, Float> findMostSimilarFace(float[] currentEmbedding, List<FaceImageInfo> list) {
+    private SimilarInfoBean findMostSimilarFace(float[] currentEmbedding, List<FaceImageInfo> list) {
+        int id = 0;
+        String name = "";
         String mostSimilarImagePath = "";
         float highestSimilarity = -1f;
 
         for (FaceImageInfo storedEmbedding : list) {
             float similarity = cosineSimilarity(currentEmbedding, storedEmbedding.getFeature());
             if (similarity > highestSimilarity) {
+                id = storedEmbedding.getId();
+                name = storedEmbedding.getName();
                 highestSimilarity = similarity;
                 mostSimilarImagePath = storedEmbedding.getPath();
             }
         }
-
-        return new Pair<>(mostSimilarImagePath, highestSimilarity);
+        return new SimilarInfoBean(id, name, mostSimilarImagePath, highestSimilarity);
     }
 
     private float cosineSimilarity(float[] vec1, float[] vec2) {

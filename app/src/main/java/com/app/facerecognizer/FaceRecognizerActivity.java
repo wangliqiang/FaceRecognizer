@@ -23,6 +23,7 @@ import com.app.facerecognizer.db.AppDatabase;
 import com.app.facerecognizer.db.entities.FaceImageInfo;
 import com.app.facerecognizer.ml.FaceEmbeddingExtractor;
 import com.app.facerecognizer.ml.FaceVerifier;
+import com.app.facerecognizer.ml.SimilarInfoBean;
 import com.google.common.util.concurrent.ListenableFuture;
 import com.google.mlkit.vision.common.InputImage;
 import com.google.mlkit.vision.face.FaceDetection;
@@ -184,13 +185,13 @@ public class FaceRecognizerActivity extends AppCompatActivity {
         }
 
         // 找到最相似的人脸
-        Pair<String, Float> mostSimilar = faceVerifier.verifyFace(compareBitmap, faceImageList);
-        if (mostSimilar.second > 0.85) {
+        SimilarInfoBean similarInfoBean = faceVerifier.verifyFace(compareBitmap, faceImageList);
+        if (similarInfoBean.getSimilarity() > 0.85) {
             isVerifyPass = true;
-            Log.e("===========", "Most similar image: " + mostSimilar.first + ", Similarity: " + mostSimilar.second);
-
+            Log.e("===========", "Most similar image: " + similarInfoBean.getName() + ", Similarity: " + similarInfoBean.getSimilarity());
             runOnUiThread(() -> {
-                binding.avatar.setImageBitmap(BitmapFactory.decodeFile(mostSimilar.first));
+                binding.avatar.setImageBitmap(BitmapFactory.decodeFile(similarInfoBean.getPath()));
+                binding.userName.setText(similarInfoBean.getName().split("\\.")[0]);
                 binding.tipsView.setText("人证核验通过!");
             });
         }
