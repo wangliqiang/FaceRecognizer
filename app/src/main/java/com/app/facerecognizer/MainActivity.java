@@ -47,7 +47,6 @@ public class MainActivity extends AppCompatActivity {
     private FaceEmbeddingExtractor embeddingExtractor;
     AppDatabase database;
 
-
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -56,7 +55,6 @@ public class MainActivity extends AppCompatActivity {
 
         CACHE_SEARCH_FACE_DIR = getCacheDir().getPath() + "/faceSearch";
         database = AppDatabase.getDatabase(this);
-
         try {
             // 初始化特征提取器
             embeddingExtractor = new FaceEmbeddingExtractor(this);
@@ -70,6 +68,7 @@ public class MainActivity extends AppCompatActivity {
         } else {
             initView();
         }
+
     }
 
     @Override
