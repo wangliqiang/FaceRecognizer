@@ -6,7 +6,6 @@ import android.graphics.BitmapFactory;
 import android.media.Image;
 import android.os.Bundle;
 import android.util.Log;
-import android.util.Pair;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.OptIn;
@@ -59,6 +58,7 @@ public class FaceRecognizerActivity extends AppCompatActivity {
     private FaceVerifier faceVerifier;
     AppDatabase database;
 
+    private float similarityNumber = 0.8f;
 
     private List<FaceImageInfo> faceImageList = new ArrayList();
     // 缓存嵌入向量
@@ -186,9 +186,9 @@ public class FaceRecognizerActivity extends AppCompatActivity {
 
         // 找到最相似的人脸
         SimilarInfoBean similarInfoBean = faceVerifier.verifyFace(compareBitmap, faceImageList);
-        if (similarInfoBean.getSimilarity() > 0.85) {
+        Log.e("===========", "Most similar image: " + similarInfoBean.getName() + ", Similarity: " + similarInfoBean.getSimilarity());
+        if (similarInfoBean.getSimilarity() > similarityNumber) {
             isVerifyPass = true;
-            Log.e("===========", "Most similar image: " + similarInfoBean.getName() + ", Similarity: " + similarInfoBean.getSimilarity());
             runOnUiThread(() -> {
                 binding.avatar.setImageBitmap(BitmapFactory.decodeFile(similarInfoBean.getPath()));
                 binding.userName.setText(similarInfoBean.getName().split("\\.")[0]);

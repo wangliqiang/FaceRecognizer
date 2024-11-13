@@ -19,7 +19,8 @@ public class FaceVerifier {
     public FaceVerifier(FaceEmbeddingExtractor embeddingExtractor, Map<String, float[]> embeddingCache) {
         this.embeddingExtractor = embeddingExtractor;
         this.embeddingCache = embeddingCache;
-        this.executorService = Executors.newCachedThreadPool();
+        int numThreads = Runtime.getRuntime().availableProcessors();
+        this.executorService = Executors.newFixedThreadPool(numThreads);
     }
 
     public SimilarInfoBean verifyFace(Bitmap compareBitmap, List<FaceImageInfo> faceImageList) {
@@ -50,44 +51,6 @@ public class FaceVerifier {
         return mostSimilar;
     }
 
-    private SimilarInfoBean findMostSimilarFace(float[] currentEmbedding, List<FaceImageInfo> list) {
-        // 使用并行流提高比对速度
-        float highestSimilarity = -1f;
-        SimilarInfoBean mostSimilar = new SimilarInfoBean(0, "", "", highestSimilarity);
-
-        // 并行处理，提高比对速度
-        for (FaceImageInfo storedEmbedding : list) {
-            float similarity = cosineSimilarity(currentEmbedding, storedEmbedding.getFeature());
-            if (similarity > highestSimilarity) {
-                highestSimilarity = similarity;
-                mostSimilar = new SimilarInfoBean(
-                        storedEmbedding.getId(),
-                        storedEmbedding.getName(),
-                        storedEmbedding.getPath(),
-                        highestSimilarity
-                );
-            }
-        }
-
-        return mostSimilar;
-    }
-
-    private float cosineSimilarity(float[] vec1, float[] vec2) {
-        float dotProduct = 0f;
-        float normA = 0f;
-        float normB = 0f;
-        for (int i = 0; i < vec1.length; i++) {
-            dotProduct += vec1[i] * vec2[i];
-            normA += vec1[i] * vec1[i];
-            normB += vec2[i] * vec2[i];
-        }
-
-        // 防止除零错误，如果某个向量长度为0，返回相似度为0
-        if (normA == 0 || normB == 0) return 0f;
-
-        return dotProduct / ((float) Math.sqrt(normA) * (float) Math.sqrt(normB));
-    }
-
     // 批量计算余弦相似度，如果一次比较多个面孔
     private SimilarInfoBean[] batchCompareFaces(float[] currentEmbedding, List<FaceImageInfo> list) {
         SimilarInfoBean[] results = new SimilarInfoBean[list.size()];
@@ -99,7 +62,11 @@ public class FaceVerifier {
             final int index = i;
             futures[i] = CompletableFuture.runAsync(() -> {
                 FaceImageInfo storedEmbedding = list.get(index);
-                float similarity = cosineSimilarity(currentEmbedding, storedEmbedding.getFeature());
+                // 归一化数据库中的特征向量
+                float[] storedFeature = storedEmbedding.getFeature();
+                normalizeVector(storedFeature);
+
+                float similarity = tripletLossBasedSimilarity(currentEmbedding, storedFeature);
                 results[index] = new SimilarInfoBean(
                         storedEmbedding.getId(),
                         storedEmbedding.getName(),
@@ -113,6 +80,54 @@ public class FaceVerifier {
         CompletableFuture.allOf(futures).join();
 
         return results;
+    }
+
+    // 归一化特征向量
+    private void normalizeVector(float[] vector) {
+        float norm = 0f;
+        for (float v : vector) {
+            norm += v * v;
+        }
+        norm = (float) Math.sqrt(norm);
+        for (int i = 0; i < vector.length; i++) {
+            vector[i] /= norm;  // L2归一化
+        }
+    }
+
+    // 基于三元组损失的相似度计算
+    private float tripletLossBasedSimilarity(float[] vec1, float[] vec2) {
+        // 计算余弦相似度和欧氏距离
+        float cosineSim = cosineSimilarity(vec1, vec2);
+        float euclideanDist = euclideanDistance(vec1, vec2);
+
+        // 归一化欧氏距离
+        float euclideanSim = 1 / (1 + euclideanDist);  // 使得距离越小相似度越大
+
+        // 三元组损失思想：如果余弦相似度很高，欧氏距离很小，表明这两个人脸非常相似
+        return 0.7f * cosineSim + 0.3f * euclideanSim;
+    }
+
+    private float cosineSimilarity(float[] vec1, float[] vec2) {
+        float dotProduct = 0f;
+        float normA = 0f;
+        float normB = 0f;
+        for (int i = 0; i < vec1.length; i++) {
+            dotProduct += vec1[i] * vec2[i];
+            normA += vec1[i] * vec1[i];
+            normB += vec2[i] * vec2[i];
+        }
+
+        if (normA == 0 || normB == 0) return 0f;
+
+        return dotProduct / (float) (Math.sqrt(normA) * Math.sqrt(normB));
+    }
+
+    private float euclideanDistance(float[] vec1, float[] vec2) {
+        float sum = 0;
+        for (int i = 0; i < vec1.length; i++) {
+            sum += Math.pow(vec1[i] - vec2[i], 2);
+        }
+        return (float) Math.sqrt(sum);
     }
 
     public void close() {
