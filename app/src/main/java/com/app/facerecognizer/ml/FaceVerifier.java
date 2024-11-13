@@ -64,7 +64,6 @@ public class FaceVerifier {
                 FaceImageInfo storedEmbedding = list.get(index);
                 // 归一化数据库中的特征向量
                 float[] storedFeature = storedEmbedding.getFeature();
-                normalizeVector(storedFeature);
 
                 float similarity = tripletLossBasedSimilarity(currentEmbedding, storedFeature);
                 results[index] = new SimilarInfoBean(
@@ -80,18 +79,6 @@ public class FaceVerifier {
         CompletableFuture.allOf(futures).join();
 
         return results;
-    }
-
-    // 归一化特征向量
-    private void normalizeVector(float[] vector) {
-        float norm = 0f;
-        for (float v : vector) {
-            norm += v * v;
-        }
-        norm = (float) Math.sqrt(norm);
-        for (int i = 0; i < vector.length; i++) {
-            vector[i] /= norm;  // L2归一化
-        }
     }
 
     // 基于三元组损失的相似度计算
