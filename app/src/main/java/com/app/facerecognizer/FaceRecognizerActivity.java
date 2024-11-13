@@ -58,7 +58,7 @@ public class FaceRecognizerActivity extends AppCompatActivity {
     private FaceVerifier faceVerifier;
     AppDatabase database;
 
-    private float similarityNumber = 0.8f;
+    private float similarityNumber = 0.75f;
 
     private List<FaceImageInfo> faceImageList = new ArrayList();
     // 缓存嵌入向量
