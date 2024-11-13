@@ -9,6 +9,7 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
@@ -105,8 +106,8 @@ public class MainActivity extends AppCompatActivity {
 
         };
         binding.exportImage.setOnClickListener(v -> {
+            binding.progressBar.setVisibility(View.VISIBLE);
             copyImagesFromAssets(this, CACHE_SEARCH_FACE_DIR);
-            loadImageList();
             // 先清空数据库，然后生成特征值，保存到数据库
             Executors.newSingleThreadExecutor().execute(() -> {
                 database.faceImageDao().deleteAll();
@@ -122,12 +123,30 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void generateEmbeddingsForImages() {
+        faceImageList.clear();
+        File folder = new File(CACHE_SEARCH_FACE_DIR);
+        File[] subFaceFiles = folder.listFiles();
+        if (subFaceFiles != null) {
+            Arrays.stream(subFaceFiles)
+                    .filter(file -> !file.isDirectory() && file.getName().matches("(?i).*\\.(jpg|jpeg|png)$"))
+                    .sorted(Comparator.comparingLong(File::lastModified).reversed())
+                    .forEach(file -> {
+                        FaceImageInfo faceImageInfo = new FaceImageInfo(file.getName(), file.getPath(), null);
+                        faceImageList.add(faceImageInfo);
+                    });
+        }
+
+
         for (int i = 0; i < faceImageList.size(); i++) {
             Bitmap bitmap = BitmapFactory.decodeFile(faceImageList.get(i).getPath());
             float[] embedding = getFaceEmbedding(bitmap);
             faceImageList.get(i).setFeature(embedding);
             database.faceImageDao().insert(faceImageList.get(i));
         }
+        runOnUiThread(() -> {
+            binding.progressBar.setVisibility(View.GONE);
+            faceImageListAdapter.notifyDataSetChanged();
+        });
     }
 
     private float[] getFaceEmbedding(Bitmap bitmap) {
@@ -150,7 +169,6 @@ public class MainActivity extends AppCompatActivity {
                         FaceImageInfo faceImageInfo = new FaceImageInfo(file.getName(), file.getPath(), null);
                         faceImageList.add(faceImageInfo);
                     });
-
             faceImageListAdapter.notifyDataSetChanged();
         }
     }

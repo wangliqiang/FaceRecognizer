@@ -5,7 +5,6 @@ import android.graphics.Bitmap;
 import android.util.Log;
 
 import org.tensorflow.lite.Interpreter;
-import org.tensorflow.lite.gpu.GpuDelegate;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -21,6 +20,8 @@ public class FaceEmbeddingExtractor {
 
     public FaceEmbeddingExtractor(Context context) throws IOException {
         mContext = context;
+        Interpreter.Options options = new Interpreter.Options();
+        options.setUseNNAPI(true);  // 启用NNAPI硬件加速
         // 初始化 TensorFlow Lite 解释器
         this.interpreter = new Interpreter(loadModelFile());
     }
