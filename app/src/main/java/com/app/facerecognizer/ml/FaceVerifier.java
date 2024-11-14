@@ -79,19 +79,6 @@ public class FaceVerifier {
         return results;
     }
 
-    // 基于三元组损失的相似度计算
-    private float tripletLossBasedSimilarity(float[] vec1, float[] vec2) {
-        // 计算余弦相似度和欧氏距离
-        float cosineSim = cosineSimilarity(vec1, vec2);
-        float euclideanDist = euclideanDistance(vec1, vec2);
-
-        // 归一化欧氏距离
-        float euclideanSim = 1 / (1 + euclideanDist);  // 使得距离越小相似度越大
-
-        // 三元组损失思想：如果余弦相似度很高，欧氏距离很小，表明这两个人脸非常相似
-        return 0.9f * cosineSim + 0.1f * euclideanSim;
-    }
-
     private float cosineSimilarity(float[] vec1, float[] vec2) {
         float dotProduct = 0f;
         float normA = 0f;
@@ -105,14 +92,6 @@ public class FaceVerifier {
         if (normA == 0 || normB == 0) return 0f;
 
         return dotProduct / (float) (Math.sqrt(normA) * Math.sqrt(normB));
-    }
-
-    private float euclideanDistance(float[] vec1, float[] vec2) {
-        float sum = 0;
-        for (int i = 0; i < vec1.length; i++) {
-            sum += (float) Math.pow(vec1[i] - vec2[i], 2);
-        }
-        return (float) Math.sqrt(sum);
     }
 
     private float[] normalize(float[] vec) {
