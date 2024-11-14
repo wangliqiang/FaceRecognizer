@@ -46,8 +46,6 @@ public class FaceVerifier {
                 mostSimilar = result;
             }
         }
-        // 查找最相似的人脸
-//        return findMostSimilarFace(currentEmbedding, faceImageList);
         return mostSimilar;
     }
 
@@ -56,16 +54,16 @@ public class FaceVerifier {
         SimilarInfoBean[] results = new SimilarInfoBean[list.size()];
 
         // 使用 CompletableFuture 并行执行
-        CompletableFuture<Void>[] futures = new CompletableFuture[list.size()];
+        CompletableFuture[] futures = new CompletableFuture[list.size()];
 
         for (int i = 0; i < list.size(); i++) {
             final int index = i;
             futures[i] = CompletableFuture.runAsync(() -> {
                 FaceImageInfo storedEmbedding = list.get(index);
-                // 归一化数据库中的特征向量
+
                 float[] storedFeature = storedEmbedding.getFeature();
 
-                float similarity = tripletLossBasedSimilarity(currentEmbedding, storedFeature);
+                float similarity = cosineSimilarity (normalize(currentEmbedding), normalize(storedFeature));
                 results[index] = new SimilarInfoBean(
                         storedEmbedding.getId(),
                         storedEmbedding.getName(),
@@ -91,7 +89,7 @@ public class FaceVerifier {
         float euclideanSim = 1 / (1 + euclideanDist);  // 使得距离越小相似度越大
 
         // 三元组损失思想：如果余弦相似度很高，欧氏距离很小，表明这两个人脸非常相似
-        return 0.7f * cosineSim + 0.3f * euclideanSim;
+        return 0.9f * cosineSim + 0.1f * euclideanSim;
     }
 
     private float cosineSimilarity(float[] vec1, float[] vec2) {
@@ -112,9 +110,24 @@ public class FaceVerifier {
     private float euclideanDistance(float[] vec1, float[] vec2) {
         float sum = 0;
         for (int i = 0; i < vec1.length; i++) {
-            sum += Math.pow(vec1[i] - vec2[i], 2);
+            sum += (float) Math.pow(vec1[i] - vec2[i], 2);
         }
         return (float) Math.sqrt(sum);
+    }
+
+    private float[] normalize(float[] vec) {
+        float norm = 0f;
+        for (float v : vec) {
+            norm += v * v;
+        }
+        norm = (float) Math.sqrt(norm);
+
+        if (norm == 0) return vec;
+
+        for (int i = 0; i < vec.length; i++) {
+            vec[i] /= norm;
+        }
+        return vec;
     }
 
     public void close() {
