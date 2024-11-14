@@ -23,7 +23,7 @@ public class FaceEmbeddingExtractor {
         Interpreter.Options options = new Interpreter.Options();
         options.setUseNNAPI(true);  // 启用NNAPI硬件加速
         // 初始化 TensorFlow Lite 解释器
-        this.interpreter = new Interpreter(loadModelFile());
+        this.interpreter = new Interpreter(loadModelFile(),options);
     }
 
     private MappedByteBuffer loadModelFile() throws IOException {
