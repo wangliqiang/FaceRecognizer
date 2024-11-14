@@ -4,6 +4,8 @@ import android.graphics.Bitmap;
 
 import com.app.facerecognizer.db.entities.FaceImageInfo;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
@@ -14,7 +16,7 @@ public class FaceVerifier {
 
     private FaceEmbeddingExtractor embeddingExtractor;
     private Map<String, float[]> embeddingCache;
-    private ExecutorService executorService; // 线程池
+    private ExecutorService executorService;
 
     public FaceVerifier(FaceEmbeddingExtractor embeddingExtractor, Map<String, float[]> embeddingCache) {
         this.embeddingExtractor = embeddingExtractor;
@@ -26,57 +28,72 @@ public class FaceVerifier {
     public SimilarInfoBean verifyFace(Bitmap compareBitmap, List<FaceImageInfo> faceImageList) {
         if (compareBitmap == null) return new SimilarInfoBean(0, "", "", 0f);
 
-        // 获取图像的特征值
         String imagePath = compareBitmap.toString();
         float[] currentEmbedding = embeddingCache.get(imagePath);
 
         if (currentEmbedding == null) {
             currentEmbedding = embeddingExtractor.getFaceEmbedding(compareBitmap);
-            // 缓存特征值
             embeddingCache.put(imagePath, currentEmbedding);
         }
 
-        // 使用批量比对方法进行比对
-        SimilarInfoBean[] compareResults = batchCompareFaces(currentEmbedding, faceImageList);
+        // 聚类比对
+        Map<String, List<Float>> scoreMap = new HashMap<>();
+        batchCompareFaces(currentEmbedding, faceImageList, scoreMap);
 
-        // 找到最相似的面部信息
-        SimilarInfoBean mostSimilar = new SimilarInfoBean(0, "", "", -1f);
-        for (SimilarInfoBean result : compareResults) {
-            if (result.getSimilarity() > mostSimilar.getSimilarity()) {
-                mostSimilar = result;
-            }
-        }
+        SimilarInfoBean mostSimilar = calculateBestMatch(scoreMap, faceImageList);
         return mostSimilar;
     }
 
-    // 批量计算余弦相似度，如果一次比较多个面孔
-    private SimilarInfoBean[] batchCompareFaces(float[] currentEmbedding, List<FaceImageInfo> list) {
-        SimilarInfoBean[] results = new SimilarInfoBean[list.size()];
-
-        // 使用 CompletableFuture 并行执行
+    private void batchCompareFaces(float[] currentEmbedding, List<FaceImageInfo> list, Map<String, List<Float>> scoreMap) {
         CompletableFuture[] futures = new CompletableFuture[list.size()];
 
         for (int i = 0; i < list.size(); i++) {
             final int index = i;
             futures[i] = CompletableFuture.runAsync(() -> {
                 FaceImageInfo storedEmbedding = list.get(index);
+                float[] storedFeature = normalize(storedEmbedding.getFeature());
+                // 标准化存储的面部特征向量
+                storedFeature = normalize(storedFeature);
 
-                float[] storedFeature = storedEmbedding.getFeature();
+                // 计算余弦相似度
+                float cosineSim = cosineSimilarity(currentEmbedding, storedFeature);
 
-                float similarity = cosineSimilarity (normalize(currentEmbedding), normalize(storedFeature));
-                results[index] = new SimilarInfoBean(
-                        storedEmbedding.getId(),
-                        storedEmbedding.getName(),
-                        storedEmbedding.getPath(),
-                        similarity
-                );
+                // 计算L2 norm
+                float l2Norm = L2Norm(currentEmbedding, storedFeature);
+
+                // 这里我们选择使用加权方式结合 L2 norm 和 Cosine 相似度
+                // 权重可以根据需求调整，这里假设为 0.5
+                float combinedSimilarity = 0.6f * cosineSim + 0.4f * (1 - l2Norm); // L2 norm 越小，越相似，因此需要转化成 1 - l2Norm
+
+                synchronized (scoreMap) {
+                    scoreMap.computeIfAbsent(storedEmbedding.getName(), k -> new ArrayList<>()).add(combinedSimilarity);
+                }
             }, executorService);
         }
 
-        // 等待所有任务完成
         CompletableFuture.allOf(futures).join();
+    }
 
-        return results;
+    private SimilarInfoBean calculateBestMatch(Map<String, List<Float>> scoreMap, List<FaceImageInfo> faceImageList) {
+        float maxAverageScore = -1f;
+        String bestMatchName = "";
+//        String bestMatchPath = "";
+        SimilarInfoBean bestMatch = new SimilarInfoBean(0, "", "", 0);
+
+        for (Map.Entry<String, List<Float>> entry : scoreMap.entrySet()) {
+            float averageScore = (float) entry.getValue().stream().mapToDouble(Float::doubleValue).average().orElse(0);
+            if (averageScore > maxAverageScore) {
+                maxAverageScore = averageScore;
+                bestMatchName = entry.getKey();
+                bestMatch = faceImageList.stream()
+                        .filter(info -> info.getName().equals(entry.getKey()))
+                        .findFirst()
+                        .map(info -> new SimilarInfoBean(info.getId(), info.getName(), info.getPath(), averageScore))
+                        .orElse(new SimilarInfoBean(0, "", "", 0));
+            }
+        }
+
+        return bestMatch;
     }
 
     private float cosineSimilarity(float[] vec1, float[] vec2) {
@@ -88,12 +105,19 @@ public class FaceVerifier {
             normA += vec1[i] * vec1[i];
             normB += vec2[i] * vec2[i];
         }
-
-        if (normA == 0 || normB == 0) return 0f;
-
         return dotProduct / (float) (Math.sqrt(normA) * Math.sqrt(normB));
     }
 
+    // 计算 L2 norm (欧几里得距离)
+    private float L2Norm(float[] vec1, float[] vec2) {
+        float sum = 0f;
+        for (int i = 0; i < vec1.length; i++) {
+            sum += Math.pow(vec1[i] - vec2[i], 2);
+        }
+        return (float) Math.sqrt(sum);
+    }
+
+    // 向量标准化
     private float[] normalize(float[] vec) {
         float norm = 0f;
         for (float v : vec) {
@@ -111,7 +135,7 @@ public class FaceVerifier {
 
     public void close() {
         if (embeddingExtractor != null) {
-            embeddingExtractor.close(); // 释放 TensorFlow Lite 资源
+            embeddingExtractor.close();
         }
         if (executorService != null) {
             executorService.shutdown();

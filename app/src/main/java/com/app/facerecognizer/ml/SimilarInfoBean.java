@@ -6,6 +6,8 @@ public class SimilarInfoBean {
     private String path;
     private float similarity;
 
+    public SimilarInfoBean() {
+    }
     public SimilarInfoBean(int id, String name, String path, float similarity) {
         this.id = id;
         this.name = name;
